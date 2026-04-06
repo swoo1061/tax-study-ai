@@ -6,7 +6,7 @@ import { getSubjectByCode, getSubjectsBySession } from "@/lib/subjects";
 import { saveAttempt, saveQuestion, addBookmark, removeBookmark, isBookmarked, isLimitReached, getRemainingToday, getDailyLimit, updateAttemptCorrectness } from "@/lib/storage";
 import { Question, Session } from "@/lib/types";
 
-type Phase = "setup" | "loading" | "question" | "result" | "error";
+type Phase = "setup" | "loading" | "question" | "result" | "error" | "summary";
 
 export default function QuizPageWrapper() {
   return (
@@ -25,18 +25,19 @@ function QuizPage() {
   const [subjectCode, setSubjectCode] = useState(initSubject);
   const [topic, setTopic] = useState("랜덤");
   const [difficulty, setDifficulty] = useState(3);
+  const [batchSize, setBatchSize] = useState(1);
 
   const [phase, setPhase] = useState<Phase>("setup");
-  const [question, setQuestion] = useState<Question | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [textAnswer, setTextAnswer] = useState("");
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [answers, setAnswers] = useState<(number | string | null)[]>([]);
+  const [results, setResults] = useState<(boolean | null)[]>([]);
+  const [showExplanation, setShowExplanation] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [questionCount, setQuestionCount] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0);
+  const [genProgress, setGenProgress] = useState(0);
   const [bookmarked, setBookmarked] = useState(false);
   const [remaining, setRemaining] = useState(getDailyLimit());
-  const [lastAttemptId, setLastAttemptId] = useState("");
-  const [selfGraded, setSelfGraded] = useState(false);
+  const [selfGraded, setSelfGraded] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (initSubject) {
@@ -48,74 +49,104 @@ function QuizPage() {
 
   const currentSubject = getSubjectByCode(subjectCode);
   const subjects = getSubjectsBySession(session);
+  const question = questions[currentIdx] || null;
 
   const generate = useCallback(async () => {
-    if (isLimitReached()) {
-      window.location.href = "/pricing";
-      return;
-    }
+    if (isLimitReached()) { window.location.href = "/pricing"; return; }
     setPhase("loading");
-    setSelected(null);
-    setTextAnswer("");
+    setQuestions([]);
+    setAnswers([]);
+    setResults([]);
+    setCurrentIdx(0);
+    setShowExplanation(false);
     setBookmarked(false);
-    setSelfGraded(false);
+    setSelfGraded({});
+    setGenProgress(0);
 
     const sub = getSubjectByCode(subjectCode);
     if (!sub) { setErrorMsg("과목을 선택하세요"); setPhase("error"); return; }
 
-    const chosenTopic = topic === "랜덤"
-      ? sub.topics[Math.floor(Math.random() * sub.topics.length)]
-      : topic;
+    const generated: Question[] = [];
 
     try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: sub.name, topic: chosenTopic, session, difficulty }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
-      const q: Question = await res.json();
-      saveQuestion(q);
-      setQuestion(q);
+      for (let i = 0; i < batchSize; i++) {
+        const chosenTopic = topic === "랜덤"
+          ? sub.topics[Math.floor(Math.random() * sub.topics.length)]
+          : topic;
+
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject: sub.name, topic: chosenTopic, session, difficulty }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+        const q: Question = await res.json();
+        saveQuestion(q);
+        generated.push(q);
+        setGenProgress(i + 1);
+      }
+
+      setQuestions(generated);
+      setAnswers(new Array(generated.length).fill(null));
+      setResults(new Array(generated.length).fill(null));
       setPhase("question");
     } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : "문제 생성 실패");
-      setPhase("error");
+      if (generated.length > 0) {
+        // 일부 성공 시 그것만이라도 사용
+        setQuestions(generated);
+        setAnswers(new Array(generated.length).fill(null));
+        setResults(new Array(generated.length).fill(null));
+        setPhase("question");
+      } else {
+        setErrorMsg(e instanceof Error ? e.message : "문제 생성 실패");
+        setPhase("error");
+      }
     }
-  }, [subjectCode, topic, session, difficulty]);
+  }, [subjectCode, topic, session, difficulty, batchSize]);
 
   const submitAnswer = () => {
     if (!question) return;
     const isObj = question.type === "객관식";
-    const userAnswer = isObj ? String(selected) : textAnswer;
-    const correctAnswer = String(question.answer);
-    const correct = isObj ? selected === question.answer : false;
+    const userAnswer = isObj ? answers[currentIdx] : answers[currentIdx];
+    const correctAnswer = question.answer;
+    const correct = isObj ? userAnswer === correctAnswer : false;
 
-    const attemptId = crypto.randomUUID();
+    const newResults = [...results];
+    newResults[currentIdx] = correct;
+    setResults(newResults);
+
     saveAttempt({
-      id: attemptId,
+      id: crypto.randomUUID(),
       questionId: question.id,
       subject: question.subject,
       topic: question.topic,
       difficulty: question.difficulty,
       session: question.session,
       correct,
-      userAnswer,
-      correctAnswer,
+      userAnswer: String(userAnswer || ""),
+      correctAnswer: String(correctAnswer),
       timestamp: Date.now(),
     });
 
-    setLastAttemptId(attemptId);
-    setQuestionCount((c) => c + 1);
-    if (correct) setCorrectCount((c) => c + 1);
     setRemaining(getRemainingToday());
-    setPhase("result");
+    setShowExplanation(true);
   };
 
   const handleSelfGrade = (correct: boolean) => {
-    updateAttemptCorrectness(lastAttemptId, correct);
-    setSelfGraded(true);
-    if (correct) setCorrectCount((c) => c + 1);
+    const newResults = [...results];
+    newResults[currentIdx] = correct;
+    setResults(newResults);
+    setSelfGraded({ ...selfGraded, [currentIdx]: true });
+  };
+
+  const goNext = () => {
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(currentIdx + 1);
+      setShowExplanation(false);
+      setBookmarked(false);
+    } else {
+      setPhase("summary");
+    }
   };
 
   const toggleBookmark = () => {
@@ -123,6 +154,9 @@ function QuizPage() {
     if (bookmarked) { removeBookmark(question.id); setBookmarked(false); }
     else { addBookmark(question); setBookmarked(true); }
   };
+
+  const totalAnswered = results.filter(r => r !== null).length;
+  const totalCorrect = results.filter(r => r === true).length;
 
   // --- SETUP ---
   if (phase === "setup") {
@@ -172,9 +206,25 @@ function QuizPage() {
           </div>
         </Field>
 
+        <Field label="문제 수">
+          <div className="flex-gap">
+            {[1, 5, 10].map((n) => (
+              <button key={n} className={`btn btn-sm ${batchSize === n ? "btn-blue" : "btn-outline"}`}
+                onClick={() => setBatchSize(n)}>
+                {n}문제
+              </button>
+            ))}
+          </div>
+          {batchSize > 1 && (
+            <div style={{ fontSize: "12px", color: "var(--text-light)", marginTop: "6px" }}>
+              {batchSize}문제를 한 번에 생성합니다. 약 {batchSize * 8}초 소요 예상
+            </div>
+          )}
+        </Field>
+
         <button className="btn btn-blue btn-full" onClick={generate} disabled={!subjectCode}
           style={{ marginTop: "8px", fontSize: "16px", padding: "14px" }}>
-          문제 생성하기
+          {batchSize === 1 ? "문제 생성하기" : `${batchSize}문제 생성하기`}
         </button>
       </div>
     );
@@ -185,8 +235,17 @@ function QuizPage() {
     return (
       <div style={{ textAlign: "center", padding: "80px 0" }}>
         <div style={{ fontSize: "40px", marginBottom: "16px" }}>&#9997;&#65039;</div>
-        <div style={{ fontSize: "18px", fontWeight: 600 }}>AI가 문제를 만들고 있습니다...</div>
-        <div style={{ color: "var(--text-light)", fontSize: "14px", marginTop: "8px" }}>약 5~10초 소요</div>
+        <div style={{ fontSize: "18px", fontWeight: 600 }}>
+          AI가 문제를 만들고 있습니다... {batchSize > 1 && `(${genProgress}/${batchSize})`}
+        </div>
+        <div style={{ color: "var(--text-light)", fontSize: "14px", marginTop: "8px" }}>
+          {batchSize === 1 ? "약 5~10초 소요" : `약 ${Math.max(0, (batchSize - genProgress) * 8)}초 남음`}
+        </div>
+        {batchSize > 1 && (
+          <div className="progress-bar" style={{ maxWidth: "300px", margin: "16px auto 0" }}>
+            <div className="progress-fill" style={{ width: `${(genProgress / batchSize) * 100}%` }} />
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "center", gap: "6px", marginTop: "20px" }}>
           {[0, 1, 2].map((i) => (
             <div key={i} className="loading-dot" style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
@@ -207,27 +266,86 @@ function QuizPage() {
     );
   }
 
-  // --- QUESTION / RESULT ---
+  // --- SUMMARY (다수 문제 완료 후) ---
+  if (phase === "summary") {
+    const pct = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
+    return (
+      <div>
+        <h1 style={{ fontSize: "22px", textAlign: "center", marginBottom: "20px" }}>풀이 완료</h1>
+
+        <div className="card" style={{ textAlign: "center", marginBottom: "20px" }}>
+          <div style={{ fontSize: "48px", fontWeight: 700, color: pct >= 60 ? "var(--green)" : "var(--red)" }}>{pct}점</div>
+          <div style={{ color: "var(--text-muted)" }}>{totalCorrect}/{totalAnswered} 정답</div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "20px" }}>
+          {questions.map((q, i) => (
+            <div key={i} className="card-sm" style={{ border: "1px solid var(--border)", cursor: "pointer" }}
+              onClick={() => { setCurrentIdx(i); setShowExplanation(true); setPhase("question"); }}>
+              <div className="flex-between">
+                <div className="flex-gap">
+                  <span style={{ fontWeight: 700 }}>#{i + 1}</span>
+                  <span className="badge" style={{
+                    background: results[i] === true ? "#dcfce7" : results[i] === false ? "#fee2e2" : "#f1f5f9",
+                    color: results[i] === true ? "#166534" : results[i] === false ? "#991b1b" : "#666",
+                  }}>{results[i] === true ? "O" : results[i] === false ? "X" : "-"}</span>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{q.topic}</span>
+                </div>
+                <span style={{ fontSize: "12px", color: "var(--text-light)" }}>해설 보기</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button className="btn btn-blue" style={{ flex: 1 }} onClick={generate}>다시 풀기</button>
+          <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => setPhase("setup")}>설정 변경</button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- QUESTION ---
   if (!question) return null;
   const isObj = question.type === "객관식";
+  const isAnswered = results[currentIdx] !== null;
+  const showingExplanation = showExplanation && isAnswered;
 
   return (
     <div>
       {/* Header */}
-      <div className="flex-between" style={{ marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
+      <div className="flex-between" style={{ marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
         <div className="flex-gap" style={{ flexWrap: "wrap" }}>
+          {questions.length > 1 && (
+            <span style={{ fontWeight: 700, fontSize: "15px" }}>{currentIdx + 1}/{questions.length}</span>
+          )}
           <span className="badge" style={{ background: "#dbeafe", color: "#1d4ed8" }}>{question.session}</span>
           <span className="badge" style={{ background: "#fef3c7", color: "#92400e" }}>{question.subject}</span>
           <span className="badge" style={{ background: "#f3e8ff", color: "#6b21a8" }}>{question.topic}</span>
         </div>
         <div className="flex-gap" style={{ fontSize: "13px", color: "var(--text-light)" }}>
           <span>{"★".repeat(question.difficulty)}{"☆".repeat(5 - question.difficulty)}</span>
-          {questionCount > 0 && <span>{correctCount}/{questionCount}</span>}
+          {totalAnswered > 0 && <span>{totalCorrect}/{totalAnswered}</span>}
           <button onClick={toggleBookmark} style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer" }}>
             {bookmarked ? "★" : "☆"}
           </button>
         </div>
       </div>
+
+      {/* Question nav (다수 문제일 때) */}
+      {questions.length > 1 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "12px" }}>
+          {questions.map((_, i) => (
+            <button key={i} onClick={() => { setCurrentIdx(i); setShowExplanation(results[i] !== null); setBookmarked(false); }}
+              style={{
+                width: "32px", height: "32px", borderRadius: "6px", fontSize: "12px", fontWeight: 600,
+                border: i === currentIdx ? "2px solid var(--blue)" : "1px solid var(--border)",
+                background: results[i] === true ? "#dcfce7" : results[i] === false ? "#fee2e2" : (i === currentIdx ? "#dbeafe" : "var(--bg-card)"),
+                cursor: "pointer", color: "var(--text)",
+              }}>{i + 1}</button>
+          ))}
+        </div>
+      )}
 
       {/* Body */}
       <div className="card" style={{ marginBottom: "16px", fontSize: "15px", lineHeight: "1.7", whiteSpace: "pre-wrap" }}>
@@ -238,19 +356,24 @@ function QuizPage() {
       {isObj && question.choices && (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
           {question.choices.map((c) => {
-            const isSel = selected === c.number;
+            const isSel = answers[currentIdx] === c.number;
             const isCorr = c.number === question.answer;
             let bg = "var(--bg-card)";
             let border = "1px solid var(--border)";
-            if (phase === "result") {
+            if (showingExplanation) {
               if (isCorr) { bg = "#dcfce7"; border = "2px solid var(--green)"; }
               else if (isSel && !isCorr) { bg = "#fee2e2"; border = "2px solid var(--red)"; }
             } else if (isSel) { bg = "#dbeafe"; border = "2px solid var(--blue)"; }
 
             return (
-              <button key={c.number} onClick={() => phase === "question" && setSelected(c.number)}
-                disabled={phase === "result"}
-                style={{ background: bg, border, borderRadius: "10px", padding: "14px 16px", textAlign: "left", cursor: phase === "question" ? "pointer" : "default", fontSize: "14px", lineHeight: "1.5", color: "var(--text)" }}>
+              <button key={c.number}
+                onClick={() => {
+                  if (!isAnswered) {
+                    const newAns = [...answers]; newAns[currentIdx] = c.number; setAnswers(newAns);
+                  }
+                }}
+                disabled={isAnswered}
+                style={{ background: bg, border, borderRadius: "10px", padding: "14px 16px", textAlign: "left", cursor: isAnswered ? "default" : "pointer", fontSize: "14px", lineHeight: "1.5", color: "var(--text)" }}>
                 <strong style={{ marginRight: "8px" }}>{c.number}.</strong>{c.text}
               </button>
             );
@@ -259,60 +382,50 @@ function QuizPage() {
       )}
 
       {/* Text answer */}
-      {!isObj && phase === "question" && (
-        <div style={{ marginBottom: "16px" }}>
-          <textarea className="textarea" value={textAnswer} onChange={(e) => setTextAnswer(e.target.value)}
-            placeholder="답안을 작성하세요..." />
-        </div>
+      {!isObj && !isAnswered && (
+        <textarea className="textarea" value={String(answers[currentIdx] || "")}
+          onChange={(e) => { const a = [...answers]; a[currentIdx] = e.target.value; setAnswers(a); }}
+          placeholder="답안을 작성하세요..." style={{ marginBottom: "16px" }} />
       )}
 
       {/* Submit */}
-      {phase === "question" && (
+      {!isAnswered && (
         <button className="btn btn-blue btn-full" onClick={submitAnswer}
-          disabled={isObj ? selected === null : textAnswer.trim() === ""}
+          disabled={isObj ? answers[currentIdx] === null : !String(answers[currentIdx] || "").trim()}
           style={{ fontSize: "16px", padding: "14px" }}>
           제출하기
         </button>
       )}
 
-      {/* Result */}
-      {phase === "result" && (
+      {/* Result + Explanation */}
+      {showingExplanation && (
         <>
           {isObj && (
             <div style={{
               padding: "14px 16px", borderRadius: "10px", marginBottom: "12px", fontWeight: 600, fontSize: "16px",
-              background: selected === question.answer ? "#dcfce7" : "#fee2e2",
-              color: selected === question.answer ? "#166534" : "#991b1b",
+              background: results[currentIdx] ? "#dcfce7" : "#fee2e2",
+              color: results[currentIdx] ? "#166534" : "#991b1b",
             }}>
-              {selected === question.answer ? "정답입니다!" : `오답입니다. 정답: ${question.answer}번`}
+              {results[currentIdx] ? "정답입니다!" : `오답입니다. 정답: ${question.answer}번`}
             </div>
           )}
 
-          {/* 주관식 자기채점 */}
           {!isObj && (
             <div className="card" style={{ marginBottom: "12px", border: "1px solid var(--border)" }}>
               <div style={{ fontWeight: 600, marginBottom: "8px", color: "#1d4ed8" }}>모범답안</div>
               <div style={{ fontSize: "14px", lineHeight: "1.7", whiteSpace: "pre-wrap", marginBottom: "12px" }}>
                 {String(question.answer)}
               </div>
-              {!selfGraded ? (
+              {!selfGraded[currentIdx] ? (
                 <div>
-                  <div style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "8px" }}>
-                    모범답안과 비교하여 자기채점 해주세요:
-                  </div>
+                  <div style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "8px" }}>자기채점:</div>
                   <div className="flex-gap">
-                    <button className="btn btn-sm" style={{ background: "var(--green)" }} onClick={() => handleSelfGrade(true)}>
-                      O 정답
-                    </button>
-                    <button className="btn btn-sm btn-red" onClick={() => handleSelfGrade(false)}>
-                      X 오답
-                    </button>
+                    <button className="btn btn-sm" style={{ background: "var(--green)" }} onClick={() => handleSelfGrade(true)}>O 정답</button>
+                    <button className="btn btn-sm btn-red" onClick={() => handleSelfGrade(false)}>X 오답</button>
                   </div>
                 </div>
               ) : (
-                <div style={{ fontSize: "13px", color: "var(--green)", fontWeight: 600 }}>
-                  채점 완료!
-                </div>
+                <div style={{ fontSize: "13px", color: "var(--green)", fontWeight: 600 }}>채점 완료!</div>
               )}
             </div>
           )}
@@ -323,18 +436,20 @@ function QuizPage() {
           </div>
 
           <div style={{ display: "flex", gap: "10px" }}>
-            <button className="btn btn-blue" style={{ flex: 1 }} onClick={generate}>다음 문제</button>
+            {currentIdx < questions.length - 1 ? (
+              <button className="btn btn-blue" style={{ flex: 1 }} onClick={goNext}>다음 문제</button>
+            ) : questions.length > 1 ? (
+              <button className="btn btn-blue" style={{ flex: 1 }} onClick={() => setPhase("summary")}>결과 보기</button>
+            ) : (
+              <button className="btn btn-blue" style={{ flex: 1 }} onClick={generate}>다음 문제</button>
+            )}
             <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => setPhase("setup")}>설정 변경</button>
           </div>
 
           <button
             onClick={() => {
-              const params = new URLSearchParams({
-                questionId: question.id,
-                subject: question.subject,
-                topic: question.topic,
-              });
-              window.open(`/support?error=1&${params.toString()}`, "_blank");
+              const p = new URLSearchParams({ questionId: question.id, subject: question.subject, topic: question.topic });
+              window.open(`/support?error=1&${p.toString()}`, "_blank");
             }}
             style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: "12px", color: "var(--text-light)", cursor: "pointer", textDecoration: "underline" }}>
             이 문제에 오류가 있나요? 신고하기
