@@ -25,14 +25,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   };
 
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>세무사 시험 AI 문제풀이</title>
         <meta name="description" content="세무사 1·2차 시험 대비 무한 AI 문제 생성" />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <nav className="nav">
           <a href="/" className="nav-brand">세무사 AI</a>
           <button className="nav-hamburger" onClick={() => setMenuOpen(!menuOpen)}>

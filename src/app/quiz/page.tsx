@@ -77,10 +77,11 @@ function QuizPage() {
   const [reportDesc, setReportDesc] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [reportResult, setReportResult] = useState<{ message: string; status: string } | null>(null);
-  const [restored, setRestored] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // 세션 복구 (새로고침 시)
+  // 클라이언트 마운트 + 세션 복구
   useEffect(() => {
+    setMounted(true);
     if (initSubject) {
       const s = getSubjectByCode(initSubject);
       if (s) { setSession(s.session); setSubjectCode(s.code); }
@@ -102,7 +103,6 @@ function QuizPage() {
       setDifficulty(saved.difficulty);
       setBatchSize(saved.batchSize);
       setShowExplanation(saved.results[saved.currentIdx] !== null);
-      setRestored(true);
     }
   }, [initSubject]);
 
@@ -227,6 +227,11 @@ function QuizPage() {
 
   const totalAnswered = results.filter(r => r !== null).length;
   const totalCorrect = results.filter(r => r === true).length;
+
+  // 클라이언트 마운트 전에는 빈 화면 (hydration 안전)
+  if (!mounted) {
+    return <div style={{ textAlign: "center", padding: "40px" }}>로딩 중...</div>;
+  }
 
   // --- SETUP ---
   if (phase === "setup") {
