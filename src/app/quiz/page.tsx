@@ -16,6 +16,40 @@ export default function QuizPageWrapper() {
   );
 }
 
+const QUIZ_SESSION_KEY = "tax-study-quiz-session";
+
+interface QuizSession {
+  phase: Phase;
+  questions: Question[];
+  currentIdx: number;
+  answers: (number | string | null)[];
+  results: (boolean | null)[];
+  selfGraded: Record<number, boolean>;
+  session: Session;
+  subjectCode: string;
+  topic: string;
+  difficulty: number;
+  batchSize: number;
+}
+
+function saveQuizSession(data: QuizSession) {
+  try { localStorage.setItem(QUIZ_SESSION_KEY, JSON.stringify(data)); } catch {}
+}
+
+function loadQuizSession(): QuizSession | null {
+  try {
+    const raw = localStorage.getItem(QUIZ_SESSION_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data.questions || data.questions.length === 0) return null;
+    return data;
+  } catch { return null; }
+}
+
+function clearQuizSession() {
+  localStorage.removeItem(QUIZ_SESSION_KEY);
+}
+
 function QuizPage() {
   const params = useSearchParams();
   const initSubject = params.get("subject") || "";
@@ -43,14 +77,40 @@ function QuizPage() {
   const [reportDesc, setReportDesc] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [reportResult, setReportResult] = useState<{ message: string; status: string } | null>(null);
+  const [restored, setRestored] = useState(false);
 
+  // 세션 복구 (새로고침 시)
   useEffect(() => {
     if (initSubject) {
       const s = getSubjectByCode(initSubject);
       if (s) { setSession(s.session); setSubjectCode(s.code); }
     }
     setCoins(getCoins());
+
+    // 저장된 세션 복구
+    const saved = loadQuizSession();
+    if (saved && saved.phase !== "setup" && saved.phase !== "loading") {
+      setPhase(saved.phase);
+      setQuestions(saved.questions);
+      setCurrentIdx(saved.currentIdx);
+      setAnswers(saved.answers);
+      setResults(saved.results);
+      setSelfGraded(saved.selfGraded || {});
+      setSession(saved.session);
+      setSubjectCode(saved.subjectCode);
+      setTopic(saved.topic);
+      setDifficulty(saved.difficulty);
+      setBatchSize(saved.batchSize);
+      setShowExplanation(saved.results[saved.currentIdx] !== null);
+      setRestored(true);
+    }
   }, [initSubject]);
+
+  // 세션 자동 저장 (상태 변경 시)
+  useEffect(() => {
+    if (phase === "setup" || phase === "loading" || phase === "error" || questions.length === 0) return;
+    saveQuizSession({ phase, questions, currentIdx, answers, results, selfGraded, session, subjectCode, topic, difficulty, batchSize });
+  }, [phase, questions, currentIdx, answers, results, selfGraded]);
 
   const currentSubject = getSubjectByCode(subjectCode);
   const subjects = getSubjectsBySession(session);
@@ -271,7 +331,7 @@ function QuizPage() {
       <div style={{ textAlign: "center", padding: "60px 0" }}>
         <div style={{ fontSize: "18px", color: "var(--red)", marginBottom: "12px" }}>오류 발생</div>
         <div style={{ color: "var(--text-muted)", marginBottom: "20px" }}>{errorMsg}</div>
-        <button className="btn btn-blue" onClick={() => setPhase("setup")}>돌아가기</button>
+        <button className="btn btn-blue" onClick={() => { clearQuizSession(); setPhase("setup"); }}>돌아가기</button>
       </div>
     );
   }
@@ -308,8 +368,8 @@ function QuizPage() {
         </div>
 
         <div style={{ display: "flex", gap: "10px" }}>
-          <button className="btn btn-blue" style={{ flex: 1 }} onClick={generate}>다시 풀기</button>
-          <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => setPhase("setup")}>설정 변경</button>
+          <button className="btn btn-blue" style={{ flex: 1 }} onClick={() => { clearQuizSession(); generate(); }}>다시 풀기</button>
+          <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => { clearQuizSession(); setPhase("setup"); }}>설정 변경</button>
         </div>
       </div>
     );
@@ -453,7 +513,7 @@ function QuizPage() {
             ) : (
               <button className="btn btn-blue" style={{ flex: 1 }} onClick={generate}>다음 문제</button>
             )}
-            <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => setPhase("setup")}>설정 변경</button>
+            <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => { clearQuizSession(); setPhase("setup"); }}>설정 변경</button>
           </div>
 
           {/* 인라인 오류 신고 */}
