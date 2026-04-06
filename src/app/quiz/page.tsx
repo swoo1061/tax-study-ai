@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSubjectByCode, getSubjectsBySession } from "@/lib/subjects";
-import { saveAttempt, saveQuestion, addBookmark, removeBookmark, isBookmarked, isLimitReached, getRemainingToday, getDailyLimit, updateAttemptCorrectness } from "@/lib/storage";
+import { saveAttempt, saveQuestion, addBookmark, removeBookmark, isBookmarked, isLimitReached, updateAttemptCorrectness, getCoins, useCoins, COIN_COSTS } from "@/lib/storage";
 import { Question, Session } from "@/lib/types";
 
 type Phase = "setup" | "loading" | "question" | "result" | "error" | "summary";
@@ -36,7 +36,7 @@ function QuizPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [genProgress, setGenProgress] = useState(0);
   const [bookmarked, setBookmarked] = useState(false);
-  const [remaining, setRemaining] = useState(getDailyLimit());
+  const [coins, setCoins] = useState(0);
   const [selfGraded, setSelfGraded] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
@@ -44,7 +44,7 @@ function QuizPage() {
       const s = getSubjectByCode(initSubject);
       if (s) { setSession(s.session); setSubjectCode(s.code); }
     }
-    setRemaining(getRemainingToday());
+    setCoins(getCoins());
   }, [initSubject]);
 
   const currentSubject = getSubjectByCode(subjectCode);
@@ -52,7 +52,12 @@ function QuizPage() {
   const question = questions[currentIdx] || null;
 
   const generate = useCallback(async () => {
-    if (isLimitReached()) { window.location.href = "/pricing"; return; }
+    const cost = batchSize * COIN_COSTS.question;
+    if (!useCoins(cost, `문제 ${batchSize}개 생성`)) {
+      window.location.href = "/pricing";
+      return;
+    }
+    setCoins(getCoins());
     setPhase("loading");
     setQuestions([]);
     setAnswers([]);
@@ -128,7 +133,7 @@ function QuizPage() {
       timestamp: Date.now(),
     });
 
-    setRemaining(getRemainingToday());
+    setCoins(getCoins());
     setShowExplanation(true);
   };
 
@@ -165,7 +170,7 @@ function QuizPage() {
         <div className="flex-between" style={{ marginBottom: "20px" }}>
           <h1 style={{ fontSize: "22px" }}>문제 설정</h1>
           <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-            오늘 남은 문제: <strong style={{ color: remaining > 0 ? "var(--blue)" : "var(--red)" }}>{remaining}/{getDailyLimit()}</strong>
+            보유 코인: <strong style={{ color: coins > 0 ? "var(--blue)" : "var(--red)" }}>{coins.toLocaleString()}</strong>
           </span>
         </div>
 

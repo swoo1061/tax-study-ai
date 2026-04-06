@@ -2,17 +2,19 @@
 
 import { useState, useEffect } from "react";
 import "./globals.css";
-import { getWrongAttempts } from "@/lib/storage";
+import { getWrongAttempts, getCoins } from "@/lib/storage";
 
 interface UserInfo { id: string; email: string; name: string; }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [wrongCount, setWrongCount] = useState(0);
+  const [coinCount, setCoinCount] = useState(0);
   const [user, setUser] = useState<UserInfo | null>(null);
 
   useEffect(() => {
     setWrongCount(getWrongAttempts().length);
+    setCoinCount(getCoins());
     fetch("/api/auth/me").then((r) => r.json()).then((d) => { if (d.user) setUser(d.user); }).catch(() => {});
   }, []);
 
@@ -49,6 +51,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <a href="/support" className="nav-link" onClick={() => setMenuOpen(false)}>문의</a>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "12px", color: "#fbbf24", fontWeight: 700 }}>
+              {coinCount.toLocaleString()} coin
+            </span>
             {user ? (
               <>
                 <span style={{ fontSize: "13px", color: "#94a3b8" }}>{user.name}</span>
