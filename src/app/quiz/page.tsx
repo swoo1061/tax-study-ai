@@ -481,7 +481,7 @@ function QuizPage() {
               background: results[currentIdx] ? "#dcfce7" : "#fee2e2",
               color: results[currentIdx] ? "#166534" : "#991b1b",
             }}>
-              {results[currentIdx] ? "정답입니다!" : `오답입니다. 정답: ${question.answer}번`}
+              {results[currentIdx] ? "정답입니다!" : `오답입니다. 정답: ${String(question.answer).replace(/번$/, "")}번`}
             </div>
           )}
 
