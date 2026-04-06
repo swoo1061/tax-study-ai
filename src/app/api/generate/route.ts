@@ -7,27 +7,15 @@ let _apiKey: string | null = null;
 
 function getApiKey(): string {
   if (_apiKey) return _apiKey;
-
-  // process.env may be empty if system env overrides .env.local
   const envKey = process.env.ANTHROPIC_API_KEY;
-  if (envKey && envKey.length > 0) {
-    _apiKey = envKey;
-    return _apiKey;
-  }
-
-  // Fallback: read .env.local directly
+  if (envKey && envKey.length > 0) { _apiKey = envKey; return _apiKey; }
   try {
-    const envPath = join(process.cwd(), ".env.local");
-    const content = readFileSync(envPath, "utf-8");
+    const content = readFileSync(join(process.cwd(), ".env.local"), "utf-8");
     for (const line of content.split("\n")) {
-      const match = line.match(/^ANTHROPIC_API_KEY=(.+)$/);
-      if (match) {
-        _apiKey = match[1].trim();
-        return _apiKey;
-      }
+      const m = line.match(/^ANTHROPIC_API_KEY=(.+)$/);
+      if (m) { _apiKey = m[1].trim(); return _apiKey; }
     }
   } catch {}
-
   throw new Error("ANTHROPIC_API_KEY not found");
 }
 
@@ -35,14 +23,11 @@ function getClient() {
   return new Anthropic({ apiKey: getApiKey() });
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const { subject, topic, session, difficulty } = await req.json();
+function buildPrompt(subject: string, topic: string, session: string, difficulty: number): string {
+  const isObj = session === "1차";
+  const typeLabel = isObj ? "5지선다 객관식" : "주관식 서술형";
 
-    const isObjective = session === "1차";
-    const typeLabel = isObjective ? "5지선다 객관식" : "주관식 서술형";
-
-    const prompt = `당신은 대한민국 세무사 시험 출제위원입니다.
+  return `당신은 대한민국 세무사 시험 출제위원입니다.
 
 아래 조건에 맞는 ${typeLabel} 문제를 1개 생성하세요.
 
@@ -51,22 +36,17 @@ export async function POST(req: NextRequest) {
 난이도: ${difficulty}/5 (1=매우쉬움, 5=매우어려움)
 시험: 세무사 ${session} 시험
 
-${isObjective ? `
-**객관식 형식 규칙:**
+${isObj ? `**객관식 형식 규칙:**
 - 문제 본문 작성
 - 5개 선택지 (①~⑤)
 - 정답 번호
-- 상세 해설 (왜 정답인지, 왜 오답인지 각각 설명)
-` : `
-**주관식 형식 규칙:**
+- 상세 해설 (왜 정답인지, 왜 오답인지 각각 설명)` : `**주관식 형식 규칙:**
 - 문제 본문 작성 (계산문제 또는 서술문제)
 - 모범답안 작성
-- 상세 해설 (풀이 과정, 관련 법조문/기준서 인용)
-`}
+- 상세 해설 (풀이 과정, 관련 법조문/기준서 인용)`}
 
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만:
-${isObjective ? `
-{
+${isObj ? `{
   "body": "문제 본문",
   "choices": [
     {"number": 1, "text": "선택지1"},
@@ -77,40 +57,53 @@ ${isObjective ? `
   ],
   "answer": 정답번호,
   "explanation": "상세 해설"
-}` : `
-{
+}` : `{
   "body": "문제 본문",
   "answer": "모범답안",
   "explanation": "상세 해설 (풀이과정 포함)"
 }`}`;
+}
 
-    const message = await getClient().messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-    });
+async function generateOne(subject: string, topic: string, session: string, difficulty: number) {
+  const prompt = buildPrompt(subject, topic, session, difficulty);
+  const message = await getClient().messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const text = message.content[0].type === "text" ? message.content[0].text : "";
+  const jsonStr = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+  const parsed = JSON.parse(jsonStr);
+  const isObj = session === "1차";
+  return {
+    id: crypto.randomUUID(),
+    subject, topic, difficulty, session,
+    type: isObj ? "객관식" : "주관식",
+    body: parsed.body,
+    choices: parsed.choices || undefined,
+    answer: parsed.answer,
+    explanation: parsed.explanation,
+  };
+}
 
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "";
+// Single question
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { subject, topic, session, difficulty, batch } = body;
 
-    // JSON 파싱 (코드블록 제거)
-    const jsonStr = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(jsonStr);
+    // Batch mode for exam
+    if (batch && Array.isArray(batch)) {
+      const questions = [];
+      for (const item of batch) {
+        const q = await generateOne(item.subject, item.topic, item.session, item.difficulty);
+        questions.push(q);
+      }
+      return NextResponse.json({ questions });
+    }
 
-    const question = {
-      id: crypto.randomUUID(),
-      subject,
-      topic,
-      difficulty,
-      session,
-      type: isObjective ? "객관식" : "주관식",
-      body: parsed.body,
-      choices: parsed.choices || undefined,
-      answer: parsed.answer,
-      explanation: parsed.explanation,
-    };
-
-    return NextResponse.json(question);
+    const q = await generateOne(subject, topic, session, difficulty);
+    return NextResponse.json(q);
   } catch (error: unknown) {
     console.error("Generation error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";

@@ -44,3 +44,39 @@ export interface SubjectStats {
   correct: number;
   rate: number;
 }
+
+export interface TopicStats {
+  topic: string;
+  subject: string;
+  total: number;
+  correct: number;
+  rate: number;
+}
+
+export interface DailyCount {
+  date: string; // YYYY-MM-DD
+  count: number;
+}
+
+export interface ExamConfig {
+  session: Session;
+  subjectCode: string;
+  questionCount: number;
+  timeLimitMinutes: number;
+}
+
+export interface ExamResult {
+  id: string;
+  config: ExamConfig;
+  questions: Question[];
+  answers: (number | string | null)[];
+  results: boolean[];
+  score: number;
+  total: number;
+  startedAt: number;
+  finishedAt: number;
+}
+
+export interface SavedQuestion extends Question {
+  bookmarkedAt: number;
+}
