@@ -38,6 +38,11 @@ function QuizPage() {
   const [bookmarked, setBookmarked] = useState(false);
   const [coins, setCoins] = useState(0);
   const [selfGraded, setSelfGraded] = useState<Record<number, boolean>>({});
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportType, setReportType] = useState("wrong_answer");
+  const [reportDesc, setReportDesc] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportResult, setReportResult] = useState<{ message: string; status: string } | null>(null);
 
   useEffect(() => {
     if (initSubject) {
@@ -451,14 +456,102 @@ function QuizPage() {
             <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => setPhase("setup")}>설정 변경</button>
           </div>
 
-          <button
-            onClick={() => {
-              const p = new URLSearchParams({ questionId: question.id, subject: question.subject, topic: question.topic });
-              window.open(`/support?error=1&${p.toString()}`, "_blank");
-            }}
-            style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: "12px", color: "var(--text-light)", cursor: "pointer", textDecoration: "underline" }}>
-            이 문제에 오류가 있나요? 신고하기
-          </button>
+          {/* 인라인 오류 신고 */}
+          {!reportOpen && !reportResult && (
+            <button onClick={() => { setReportOpen(true); setReportResult(null); setReportDesc(""); }}
+              style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: "12px", color: "var(--text-light)", cursor: "pointer", textDecoration: "underline" }}>
+              이 문제에 오류가 있나요?
+            </button>
+          )}
+
+          {reportOpen && !reportResult && (
+            <div style={{ marginTop: "12px", border: "1px solid var(--red)", borderRadius: "10px", padding: "16px", background: "var(--bg-card)" }}>
+              <div className="flex-between" style={{ marginBottom: "10px" }}>
+                <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--red)" }}>오류 신고</span>
+                <button onClick={() => setReportOpen(false)}
+                  style={{ background: "none", border: "none", color: "var(--text-light)", cursor: "pointer", fontSize: "16px" }}>✕</button>
+              </div>
+
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "4px" }}>오류 유형</div>
+                <div className="flex-gap" style={{ flexWrap: "wrap" }}>
+                  {[
+                    { value: "wrong_answer", label: "정답 오류" },
+                    { value: "wrong_explanation", label: "해설 오류" },
+                    { value: "outdated_law", label: "법령 구버전" },
+                    { value: "other", label: "기타" },
+                  ].map((opt) => (
+                    <button key={opt.value}
+                      className={`btn btn-sm ${reportType === opt.value ? "btn-red" : "btn-outline"}`}
+                      onClick={() => setReportType(opt.value)}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "10px" }}>
+                <textarea className="textarea"
+                  value={reportDesc}
+                  onChange={(e) => setReportDesc(e.target.value)}
+                  placeholder="어떤 부분이 잘못되었는지 간단히 설명해주세요 (선택)"
+                  style={{ minHeight: "60px", fontSize: "13px" }} />
+              </div>
+
+              <button className="btn btn-red btn-full btn-sm" disabled={reportLoading}
+                onClick={async () => {
+                  setReportLoading(true);
+                  try {
+                    const res = await fetch("/api/report-error", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        questionId: question.id,
+                        reportType,
+                        description: reportDesc,
+                        questionData: {
+                          body: question.body,
+                          choices: question.choices,
+                          answer: question.answer,
+                          explanation: question.explanation,
+                          type: question.type,
+                          subject: question.subject,
+                          topic: question.topic,
+                        },
+                      }),
+                    });
+                    const data = await res.json();
+                    setReportResult({ message: data.message || "신고가 접수되었습니다.", status: data.report?.status || "open" });
+                  } catch {
+                    setReportResult({ message: "신고 접수에 실패했습니다. 잠시 후 다시 시도해주세요.", status: "error" });
+                  } finally {
+                    setReportLoading(false);
+                    setReportOpen(false);
+                  }
+                }}>
+                {reportLoading ? "AI 검증 중..." : "신고하기"}
+              </button>
+            </div>
+          )}
+
+          {reportResult && (
+            <div style={{
+              marginTop: "12px",
+              padding: "14px",
+              borderRadius: "10px",
+              border: `1px solid ${reportResult.status === "fixed" ? "var(--green)" : reportResult.status === "not_error" ? "var(--blue)" : "var(--yellow)"}`,
+              background: reportResult.status === "fixed" ? "#dcfce7" : reportResult.status === "not_error" ? "#dbeafe" : "#fffbeb",
+              fontSize: "13px",
+              lineHeight: "1.6",
+            }}>
+              <div style={{ fontWeight: 600, marginBottom: "4px" }}>
+                {reportResult.status === "fixed" ? "✅ 오류 확인 — 자동 수정됨"
+                  : reportResult.status === "not_error" ? "✅ 검증 완료 — 정답 확인됨"
+                  : "📋 신고 접수됨"}
+              </div>
+              <div style={{ color: "var(--text-muted)" }}>{reportResult.message}</div>
+            </div>
+          )}
         </>
       )}
     </div>
