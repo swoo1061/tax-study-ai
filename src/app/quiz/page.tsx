@@ -72,11 +72,11 @@ function QuizPage() {
   const [bookmarked, setBookmarked] = useState(false);
   const [coins, setCoins] = useState(0);
   const [selfGraded, setSelfGraded] = useState<Record<number, boolean>>({});
-  const [reportOpen, setReportOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState<Record<number, boolean>>({});
   const [reportType, setReportType] = useState("wrong_answer");
   const [reportDesc, setReportDesc] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportResult, setReportResult] = useState<{ message: string; status: string } | null>(null);
+  const [reportResult, setReportResult] = useState<Record<number, { message: string; status: string }>>({});
   const [mounted, setMounted] = useState(false);
 
   // 클라이언트 마운트 + 세션 복구
@@ -526,19 +526,19 @@ function QuizPage() {
             <button className="btn btn-gray" style={{ flex: "none", padding: "12px 16px" }} onClick={() => { clearQuizSession(); setPhase("setup"); }}>설정</button>
           </div>
 
-          {/* 인라인 오류 신고 */}
-          {!reportOpen && !reportResult && (
-            <button onClick={() => { setReportOpen(true); setReportResult(null); setReportDesc(""); }}
+          {/* 인라인 오류 신고 (문제별 독립) */}
+          {!reportOpen[currentIdx] && !reportResult[currentIdx] && (
+            <button onClick={() => { setReportOpen({ ...reportOpen, [currentIdx]: true }); setReportDesc(""); }}
               style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: "12px", color: "var(--text-light)", cursor: "pointer", textDecoration: "underline" }}>
               이 문제에 오류가 있나요?
             </button>
           )}
 
-          {reportOpen && !reportResult && (
+          {reportOpen[currentIdx] && !reportResult[currentIdx] && (
             <div style={{ marginTop: "12px", border: "1px solid var(--red)", borderRadius: "10px", padding: "16px", background: "var(--bg-card)" }}>
               <div className="flex-between" style={{ marginBottom: "10px" }}>
                 <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--red)" }}>오류 신고</span>
-                <button onClick={() => setReportOpen(false)}
+                <button onClick={() => setReportOpen({ ...reportOpen, [currentIdx]: false })}
                   style={{ background: "none", border: "none", color: "var(--text-light)", cursor: "pointer", fontSize: "16px" }}>✕</button>
               </div>
 
@@ -571,6 +571,7 @@ function QuizPage() {
               <button className="btn btn-red btn-full btn-sm" disabled={reportLoading}
                 onClick={async () => {
                   setReportLoading(true);
+                  const idx = currentIdx;
                   try {
                     const res = await fetch("/api/report-error", {
                       method: "POST",
@@ -591,12 +592,12 @@ function QuizPage() {
                       }),
                     });
                     const data = await res.json();
-                    setReportResult({ message: data.message || "신고가 접수되었습니다.", status: data.report?.status || "open" });
+                    setReportResult({ ...reportResult, [idx]: { message: data.message || "신고가 접수되었습니다.", status: data.report?.status || "open" } });
                   } catch {
-                    setReportResult({ message: "신고 접수에 실패했습니다. 잠시 후 다시 시도해주세요.", status: "error" });
+                    setReportResult({ ...reportResult, [idx]: { message: "신고 접수에 실패했습니다.", status: "error" } });
                   } finally {
                     setReportLoading(false);
-                    setReportOpen(false);
+                    setReportOpen({ ...reportOpen, [idx]: false });
                   }
                 }}>
                 {reportLoading ? "AI 검증 중..." : "신고하기"}
@@ -604,22 +605,22 @@ function QuizPage() {
             </div>
           )}
 
-          {reportResult && (
+          {reportResult[currentIdx] && (
             <div style={{
               marginTop: "12px",
               padding: "14px",
               borderRadius: "10px",
-              border: `1px solid ${reportResult.status === "fixed" ? "var(--green)" : reportResult.status === "not_error" ? "var(--blue)" : "var(--yellow)"}`,
-              background: reportResult.status === "fixed" ? "#dcfce7" : reportResult.status === "not_error" ? "#dbeafe" : "#fffbeb",
+              border: `1px solid ${reportResult[currentIdx].status === "fixed" ? "var(--green)" : reportResult[currentIdx].status === "not_error" ? "var(--blue)" : "var(--yellow)"}`,
+              background: reportResult[currentIdx].status === "fixed" ? "#dcfce7" : reportResult[currentIdx].status === "not_error" ? "#dbeafe" : "#fffbeb",
               fontSize: "13px",
               lineHeight: "1.6",
             }}>
               <div style={{ fontWeight: 600, marginBottom: "4px" }}>
-                {reportResult.status === "fixed" ? "✅ 오류 확인 — 자동 수정됨"
-                  : reportResult.status === "not_error" ? "✅ 검증 완료 — 정답 확인됨"
+                {reportResult[currentIdx].status === "fixed" ? "✅ 오류 확인 — 자동 수정됨"
+                  : reportResult[currentIdx].status === "not_error" ? "✅ 검증 완료 — 정답 확인됨"
                   : "📋 신고 접수됨"}
               </div>
-              <div style={{ color: "var(--text-muted)" }}>{reportResult.message}</div>
+              <div style={{ color: "var(--text-muted)" }}>{reportResult[currentIdx].message}</div>
             </div>
           )}
         </>
