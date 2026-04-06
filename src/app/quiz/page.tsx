@@ -373,7 +373,7 @@ function QuizPage() {
         </div>
 
         <div style={{ display: "flex", gap: "10px" }}>
-          <button className="btn btn-blue" style={{ flex: 1 }} onClick={() => { clearQuizSession(); generate(); }}>다시 풀기</button>
+          <button className="btn btn-purple" style={{ flex: 1 }} onClick={() => { clearQuizSession(); generate(); }}>새로 풀기</button>
           <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => { clearQuizSession(); setPhase("setup"); }}>설정 변경</button>
         </div>
       </div>
@@ -403,6 +403,10 @@ function QuizPage() {
           {totalAnswered > 0 && <span>{totalCorrect}/{totalAnswered}</span>}
           <button onClick={toggleBookmark} style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer" }}>
             {bookmarked ? "★" : "☆"}
+          </button>
+          <button onClick={() => { clearQuizSession(); setPhase("setup"); }}
+            style={{ background: "none", border: "1px solid var(--border)", color: "var(--text-muted)", padding: "2px 8px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}>
+            새 문제
           </button>
         </div>
       </div>
@@ -518,7 +522,8 @@ function QuizPage() {
             ) : (
               <button className="btn btn-blue" style={{ flex: 1 }} onClick={generate}>다음 문제</button>
             )}
-            <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => { clearQuizSession(); setPhase("setup"); }}>설정 변경</button>
+            <button className="btn btn-purple" style={{ flex: 1 }} onClick={() => { clearQuizSession(); generate(); }}>새로 풀기</button>
+            <button className="btn btn-gray" style={{ flex: "none", padding: "12px 16px" }} onClick={() => { clearQuizSession(); setPhase("setup"); }}>설정</button>
           </div>
 
           {/* 인라인 오류 신고 */}
