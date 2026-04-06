@@ -4,13 +4,23 @@ import { useState, useEffect } from "react";
 import "./globals.css";
 import { getWrongAttempts } from "@/lib/storage";
 
+interface UserInfo { id: string; email: string; name: string; }
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [wrongCount, setWrongCount] = useState(0);
+  const [user, setUser] = useState<UserInfo | null>(null);
 
   useEffect(() => {
     setWrongCount(getWrongAttempts().length);
+    fetch("/api/auth/me").then((r) => r.json()).then((d) => { if (d.user) setUser(d.user); }).catch(() => {});
   }, []);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setUser(null);
+    window.location.href = "/";
+  };
 
   return (
     <html lang="ko">
@@ -36,6 +46,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </a>
             <a href="/history" className="nav-link" onClick={() => setMenuOpen(false)}>학습기록</a>
             <a href="/pricing" className="nav-link" onClick={() => setMenuOpen(false)} style={{ color: "#fbbf24" }}>Pro</a>
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+            {user ? (
+              <>
+                <span style={{ fontSize: "13px", color: "#94a3b8" }}>{user.name}</span>
+                <button onClick={handleLogout}
+                  style={{ background: "none", border: "1px solid #475569", color: "#94a3b8", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}>
+                  로그아웃
+                </button>
+              </>
+            ) : (
+              <a href="/login" style={{ color: "#fff", fontSize: "13px", background: "var(--blue)", padding: "5px 14px", borderRadius: "6px", fontWeight: 600 }}>
+                로그인
+              </a>
+            )}
           </div>
         </nav>
         <main className="main">
