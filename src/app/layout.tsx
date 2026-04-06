@@ -46,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </a>
             <a href="/history" className="nav-link" onClick={() => setMenuOpen(false)}>학습기록</a>
             <a href="/pricing" className="nav-link" onClick={() => setMenuOpen(false)} style={{ color: "#fbbf24" }}>Pro</a>
+            <a href="/support" className="nav-link" onClick={() => setMenuOpen(false)}>문의</a>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
             {user ? (
@@ -66,6 +67,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="main">
           {children}
         </main>
+        <footer style={{
+          borderTop: "1px solid var(--border)",
+          padding: "20px 24px",
+          marginTop: "40px",
+          fontSize: "12px",
+          color: "var(--text-light)",
+          textAlign: "center",
+          lineHeight: "2",
+        }}>
+          <div style={{ marginBottom: "8px" }}>
+            <a href="/info/about" style={{ marginRight: "16px" }}>회사소개</a>
+            <a href="/info/terms" style={{ marginRight: "16px" }}>이용약관</a>
+            <a href="/info/privacy" style={{ marginRight: "16px" }}>개인정보처리방침</a>
+            <a href="/support">문의하기</a>
+          </div>
+          <div>
+            본 서비스는 AI가 생성한 학습 보조 자료이며, 세무사 시험 출제기관과 무관합니다.
+          </div>
+          <div style={{ marginTop: "4px" }}>
+            &copy; 2025 세무사AI. All rights reserved.
+          </div>
+        </footer>
       </body>
     </html>
   );

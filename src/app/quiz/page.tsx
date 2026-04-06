@@ -326,6 +326,19 @@ function QuizPage() {
             <button className="btn btn-blue" style={{ flex: 1 }} onClick={generate}>다음 문제</button>
             <button className="btn btn-gray" style={{ flex: 1 }} onClick={() => setPhase("setup")}>설정 변경</button>
           </div>
+
+          <button
+            onClick={() => {
+              const params = new URLSearchParams({
+                questionId: question.id,
+                subject: question.subject,
+                topic: question.topic,
+              });
+              window.open(`/support?error=1&${params.toString()}`, "_blank");
+            }}
+            style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: "12px", color: "var(--text-light)", cursor: "pointer", textDecoration: "underline" }}>
+            이 문제에 오류가 있나요? 신고하기
+          </button>
         </>
       )}
     </div>
