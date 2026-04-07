@@ -723,6 +723,19 @@ function QuizPage() {
               </div>
             </div>
           )}
+          {/* 교체/확인 완료 후에도 새 문제에 대한 신고 가능 */}
+          {reportResult[currentIdx] && reportResult[currentIdx].status !== "regenerating" && (
+            <button onClick={() => {
+              const newResult = { ...reportResult };
+              delete newResult[currentIdx];
+              setReportResult(newResult);
+              setReportOpen({ ...reportOpen, [currentIdx]: true });
+              setReportDesc("");
+            }}
+              style={{ display: "block", margin: "10px auto 0", background: "none", border: "none", fontSize: "12px", color: "var(--text-light)", cursor: "pointer", textDecoration: "underline" }}>
+              이 문제도 오류가 있나요?
+            </button>
+          )}
           <style>{`@keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </>
       )}
