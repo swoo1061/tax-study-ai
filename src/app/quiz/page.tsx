@@ -76,7 +76,7 @@ function QuizPage() {
   const [reportType, setReportType] = useState("wrong_answer");
   const [reportDesc, setReportDesc] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportResult, setReportResult] = useState<Record<number, { message: string; status: string }>>({});
+  const [reportResult, setReportResult] = useState<Record<number, { message: string; status: string; correctedAnswer?: number | string; correctedExplanation?: string; customerAction?: string }>>({});
   const [mounted, setMounted] = useState(false);
 
   // 클라이언트 마운트 + 세션 복구
@@ -572,7 +572,19 @@ function QuizPage() {
                       }),
                     });
                     const data = await res.json();
-                    setReportResult({ ...reportResult, [idx]: { message: data.message || "신고가 접수되었습니다.", status: data.report?.status || "open" } });
+                    const rStatus = data.report?.status || "open";
+                    setReportResult({ ...reportResult, [idx]: {
+                      message: data.message || "신고가 접수되었습니다.",
+                      status: rStatus,
+                      customerAction: data.customerAction,
+                    }});
+                    // 오류 인정 → 코인 환불 + 문제에 수정 표시
+                    if (rStatus === "fixed") {
+                      // 코인 1개 환불
+                      const { refundCoins } = await import("@/lib/storage");
+                      refundCoins(1, "오류 문제 환불");
+                      setCoins(getCoins());
+                    }
                   } catch {
                     setReportResult({ ...reportResult, [idx]: { message: "신고 접수에 실패했습니다.", status: "error" } });
                   } finally {
@@ -588,21 +600,69 @@ function QuizPage() {
           {reportResult[currentIdx] && (
             <div style={{
               marginTop: "12px",
-              padding: "14px",
-              borderRadius: "10px",
-              border: `1px solid ${reportResult[currentIdx].status === "fixed" ? "var(--green)" : reportResult[currentIdx].status === "not_error" ? "var(--blue)" : "var(--yellow)"}`,
-              background: reportResult[currentIdx].status === "fixed" ? "#dcfce7" : reportResult[currentIdx].status === "not_error" ? "#dbeafe" : "#fffbeb",
-              fontSize: "13px",
-              lineHeight: "1.6",
+              borderRadius: "12px",
+              overflow: "hidden",
+              border: `2px solid ${reportResult[currentIdx].status === "fixed" ? "var(--green)" : reportResult[currentIdx].status === "not_error" ? "var(--blue)" : "var(--yellow)"}`,
+              animation: reportResult[currentIdx].status === "fixed" ? "slideIn 0.4s ease-out" : undefined,
             }}>
-              <div style={{ fontWeight: 600, marginBottom: "4px" }}>
-                {reportResult[currentIdx].status === "fixed" ? "✅ 오류 확인 — 자동 수정됨"
-                  : reportResult[currentIdx].status === "not_error" ? "✅ 검증 완료 — 정답 확인됨"
-                  : "📋 신고 접수됨"}
+              {/* 헤더 */}
+              <div style={{
+                padding: "14px 16px",
+                background: reportResult[currentIdx].status === "fixed" ? "var(--green)" : reportResult[currentIdx].status === "not_error" ? "var(--blue)" : "var(--yellow)",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: "15px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}>
+                {reportResult[currentIdx].status === "fixed" && <><span style={{ fontSize: "20px" }}>&#9989;</span> 오류가 확인되어 수정되었습니다</>}
+                {reportResult[currentIdx].status === "not_error" && <><span style={{ fontSize: "20px" }}>&#9989;</span> 검증 완료 — 정답이 맞습니다</>}
+                {reportResult[currentIdx].status !== "fixed" && reportResult[currentIdx].status !== "not_error" && <><span style={{ fontSize: "20px" }}>&#128203;</span> 신고가 접수되었습니다</>}
               </div>
-              <div style={{ color: "var(--text-muted)" }}>{reportResult[currentIdx].message}</div>
+
+              {/* 본문 */}
+              <div style={{ padding: "14px 16px", background: reportResult[currentIdx].status === "fixed" ? "#dcfce7" : reportResult[currentIdx].status === "not_error" ? "#dbeafe" : "#fffbeb" }}>
+                <div style={{ fontSize: "13px", color: "var(--text-muted)", lineHeight: "1.6" }}>
+                  {reportResult[currentIdx].message}
+                </div>
+
+                {/* 오류 인정 시 추가 액션 표시 */}
+                {reportResult[currentIdx].status === "fixed" && (
+                  <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: "8px",
+                      padding: "8px 12px", background: "#fff", borderRadius: "8px",
+                      fontSize: "13px", fontWeight: 600, color: "var(--green)",
+                    }}>
+                      <span style={{ fontSize: "16px" }}>&#127881;</span>
+                      코인 1개가 환불되었습니다
+                    </div>
+                    <div style={{
+                      fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5",
+                    }}>
+                      신고해주셔서 감사합니다. 같은 유형의 오류가 반복되지 않도록 AI 생성 품질에 반영됩니다.
+                    </div>
+                  </div>
+                )}
+
+                {/* 정답 확인 시 */}
+                {reportResult[currentIdx].status === "not_error" && reportResult[currentIdx].customerAction && (
+                  <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--text-muted)" }}>
+                    {reportResult[currentIdx].customerAction}
+                  </div>
+                )}
+
+                {/* 접수 시 */}
+                {reportResult[currentIdx].status !== "fixed" && reportResult[currentIdx].status !== "not_error" && (
+                  <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--text-muted)" }}>
+                    담당자가 확인 후 결과를 알려드리겠습니다.
+                  </div>
+                )}
+              </div>
             </div>
           )}
+          <style>{`@keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </>
       )}
     </div>
