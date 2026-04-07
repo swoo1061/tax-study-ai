@@ -573,26 +573,62 @@ function QuizPage() {
                     });
                     const data = await res.json();
                     const rStatus = data.report?.status || "open";
-                    const corrected = data.correctedData;
-                    setReportResult({ ...reportResult, [idx]: {
-                      message: data.message || "신고가 접수되었습니다.",
-                      status: rStatus,
-                      customerAction: data.customerAction,
-                      correctedAnswer: corrected?.answer,
-                      correctedExplanation: corrected?.explanation,
-                    }});
-                    // 오류 인정 → 실제 문제 데이터 수정 + 코인 환불
-                    if (rStatus === "fixed") {
-                      const newQuestions = [...questions];
-                      const q = { ...newQuestions[idx] };
-                      if (corrected?.answer !== undefined) q.answer = corrected.answer;
-                      if (corrected?.explanation) q.explanation = corrected.explanation;
-                      newQuestions[idx] = q;
-                      setQuestions(newQuestions);
 
+                    // 오류 인정 → 문제 자체를 새로 생성해서 통째로 교체
+                    if (rStatus === "fixed" || rStatus === "verified_error") {
+                      setReportResult({ ...reportResult, [idx]: {
+                        message: "오류가 확인되었습니다. 새 문제를 생성하고 있습니다...",
+                        status: "regenerating",
+                      }});
+
+                      // 코인 환불
                       const { refundCoins } = await import("@/lib/storage");
                       refundCoins(1, "오류 문제 환불");
                       setCoins(getCoins());
+
+                      // 같은 과목/주제/난이도로 새 문제 생성
+                      try {
+                        const regenRes = await fetch("/api/generate", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            subject: question.subject,
+                            topic: question.topic,
+                            session: question.session,
+                            difficulty: question.difficulty,
+                          }),
+                        });
+                        if (regenRes.ok) {
+                          const newQ = await regenRes.json();
+                          const newQuestions = [...questions];
+                          newQuestions[idx] = newQ;
+                          setQuestions(newQuestions);
+                          // 답안/결과 리셋
+                          const newAnswers = [...answers]; newAnswers[idx] = null; setAnswers(newAnswers);
+                          const newResults = [...results]; newResults[idx] = null; setResults(newResults);
+                          setShowExplanation(false);
+                          setReportResult({ ...reportResult, [idx]: {
+                            message: "새 문제로 교체되었습니다! 코인 1개가 환불되었습니다.",
+                            status: "fixed",
+                          }});
+                        } else {
+                          setReportResult({ ...reportResult, [idx]: {
+                            message: "오류가 확인되었습니다. 새 문제 생성에 실패했지만 코인은 환불되었습니다.",
+                            status: "fixed",
+                          }});
+                        }
+                      } catch {
+                        setReportResult({ ...reportResult, [idx]: {
+                          message: "오류가 확인되어 코인이 환불되었습니다. 다음 문제로 넘어가세요.",
+                          status: "fixed",
+                        }});
+                      }
+                    } else {
+                      setReportResult({ ...reportResult, [idx]: {
+                        message: data.message || "신고가 접수되었습니다.",
+                        status: rStatus,
+                        customerAction: data.customerAction,
+                      }});
                     }
                   } catch {
                     setReportResult({ ...reportResult, [idx]: { message: "신고 접수에 실패했습니다.", status: "error" } });
@@ -625,7 +661,8 @@ function QuizPage() {
                 alignItems: "center",
                 gap: "8px",
               }}>
-                {reportResult[currentIdx].status === "fixed" && <><span style={{ fontSize: "20px" }}>&#9989;</span> 오류가 확인되어 수정되었습니다</>}
+                {reportResult[currentIdx].status === "regenerating" && <><span style={{ fontSize: "20px" }}>&#9997;&#65039;</span> 새 문제를 생성하고 있습니다...</>}
+                {reportResult[currentIdx].status === "fixed" && <><span style={{ fontSize: "20px" }}>&#9989;</span> 새 문제로 교체되었습니다</>}
                 {reportResult[currentIdx].status === "not_error" && <><span style={{ fontSize: "20px" }}>&#9989;</span> 검증 완료 — 정답이 맞습니다</>}
                 {reportResult[currentIdx].status !== "fixed" && reportResult[currentIdx].status !== "not_error" && <><span style={{ fontSize: "20px" }}>&#128203;</span> 신고가 접수되었습니다</>}
               </div>
@@ -639,15 +676,12 @@ function QuizPage() {
                 {/* 오류 인정 시 추가 액션 표시 */}
                 {reportResult[currentIdx].status === "fixed" && (
                   <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {/* 수정 내용 표시 */}
-                    {reportResult[currentIdx].correctedAnswer !== undefined && (
-                      <div style={{ padding: "10px 12px", background: "#fff", borderRadius: "8px", fontSize: "13px" }}>
-                        <div style={{ fontWeight: 600, color: "var(--green)", marginBottom: "4px" }}>정답이 수정되었습니다</div>
-                        <div style={{ color: "var(--text-muted)" }}>
-                          위 문제의 정답과 해설이 수정된 내용으로 업데이트되었습니다.
-                        </div>
+                    <div style={{ padding: "10px 12px", background: "#fff", borderRadius: "8px", fontSize: "13px" }}>
+                      <div style={{ fontWeight: 600, color: "var(--green)", marginBottom: "4px" }}>문제가 새로 교체되었습니다</div>
+                      <div style={{ color: "var(--text-muted)" }}>
+                        오류가 있던 문제가 새로 생성된 문제로 교체되었습니다. 다시 풀어보세요!
                       </div>
-                    )}
+                    </div>
                     <div style={{
                       display: "flex", alignItems: "center", gap: "8px",
                       padding: "8px 12px", background: "#fff", borderRadius: "8px",
