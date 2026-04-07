@@ -507,7 +507,7 @@ function QuizPage() {
           </div>
 
           {/* 인라인 오류 신고 (문제별 독립) */}
-          {!reportOpen[currentIdx] && !reportResult[currentIdx] && (
+          {!reportOpen[currentIdx] && !reportResult[currentIdx] && !reportLoading && (
             <button onClick={() => { setReportOpen({ ...reportOpen, [currentIdx]: true }); setReportDesc(""); }}
               style={{ display: "block", margin: "12px auto 0", background: "none", border: "none", fontSize: "12px", color: "var(--text-light)", cursor: "pointer", textDecoration: "underline" }}>
               이 문제에 오류가 있나요?
@@ -642,7 +642,18 @@ function QuizPage() {
             </div>
           )}
 
-          {reportResult[currentIdx] && (
+          {reportResult[currentIdx]?.status === "regenerating" && (
+            <div style={{ marginTop: "16px", textAlign: "center", padding: "20px", background: "#fffbeb", borderRadius: "12px", border: "1px solid #fde68a" }}>
+              <div style={{ fontSize: "24px", marginBottom: "8px", animation: "pulse 1.5s ease-in-out infinite" }}>&#9997;&#65039;</div>
+              <div style={{ fontSize: "15px", fontWeight: 600 }}>새 문제를 생성하고 있습니다...</div>
+              <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>오류가 확인되어 같은 주제의 새 문제로 교체합니다</div>
+              <div style={{ display: "flex", justifyContent: "center", gap: "6px", marginTop: "12px" }}>
+                {[0, 1, 2].map((i) => <div key={i} className="loading-dot" style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />)}
+              </div>
+            </div>
+          )}
+
+          {reportResult[currentIdx] && reportResult[currentIdx].status !== "regenerating" && (
             <div style={{
               marginTop: "12px",
               borderRadius: "12px",
