@@ -573,14 +573,23 @@ function QuizPage() {
                     });
                     const data = await res.json();
                     const rStatus = data.report?.status || "open";
+                    const corrected = data.correctedData;
                     setReportResult({ ...reportResult, [idx]: {
                       message: data.message || "신고가 접수되었습니다.",
                       status: rStatus,
                       customerAction: data.customerAction,
+                      correctedAnswer: corrected?.answer,
+                      correctedExplanation: corrected?.explanation,
                     }});
-                    // 오류 인정 → 코인 환불 + 문제에 수정 표시
+                    // 오류 인정 → 실제 문제 데이터 수정 + 코인 환불
                     if (rStatus === "fixed") {
-                      // 코인 1개 환불
+                      const newQuestions = [...questions];
+                      const q = { ...newQuestions[idx] };
+                      if (corrected?.answer !== undefined) q.answer = corrected.answer;
+                      if (corrected?.explanation) q.explanation = corrected.explanation;
+                      newQuestions[idx] = q;
+                      setQuestions(newQuestions);
+
                       const { refundCoins } = await import("@/lib/storage");
                       refundCoins(1, "오류 문제 환불");
                       setCoins(getCoins());
@@ -630,6 +639,15 @@ function QuizPage() {
                 {/* 오류 인정 시 추가 액션 표시 */}
                 {reportResult[currentIdx].status === "fixed" && (
                   <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {/* 수정 내용 표시 */}
+                    {reportResult[currentIdx].correctedAnswer !== undefined && (
+                      <div style={{ padding: "10px 12px", background: "#fff", borderRadius: "8px", fontSize: "13px" }}>
+                        <div style={{ fontWeight: 600, color: "var(--green)", marginBottom: "4px" }}>정답이 수정되었습니다</div>
+                        <div style={{ color: "var(--text-muted)" }}>
+                          위 문제의 정답과 해설이 수정된 내용으로 업데이트되었습니다.
+                        </div>
+                      </div>
+                    )}
                     <div style={{
                       display: "flex", alignItems: "center", gap: "8px",
                       padding: "8px 12px", background: "#fff", borderRadius: "8px",
@@ -638,9 +656,7 @@ function QuizPage() {
                       <span style={{ fontSize: "16px" }}>&#127881;</span>
                       코인 1개가 환불되었습니다
                     </div>
-                    <div style={{
-                      fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5",
-                    }}>
+                    <div style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.5" }}>
                       신고해주셔서 감사합니다. 같은 유형의 오류가 반복되지 않도록 AI 생성 품질에 반영됩니다.
                     </div>
                   </div>

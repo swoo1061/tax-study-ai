@@ -57,10 +57,20 @@ export async function POST(req: NextRequest) {
     customerAction = "검토 완료 시 알림을 보내드립니다.";
   }
 
+  // 5. 수정된 데이터 추출 (오류 인정 시)
+  let correctedData: { answer?: number | string; explanation?: string } | undefined;
+  if (report.status === "fixed" && report.verifyResult?.fixes) {
+    correctedData = {
+      answer: report.verifyResult.fixes.answer,
+      explanation: report.verifyResult.fixes.explanation,
+    };
+  }
+
   return NextResponse.json({
     report: { id: report.id, status: report.status },
     message,
     customerAction,
     feedbackRegistered: report.status === "fixed" || report.status === "verified_error",
+    correctedData, // 수정된 정답/해설
   });
 }
