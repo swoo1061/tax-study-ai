@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromCookie } from "@/lib/auth";
 import { getTicketStats, getTickets, updateTicket } from "@/lib/cs-agent";
 import { getDailyQAReport, getPendingReports } from "@/lib/qa-agent";
+import { getActiveFeedback, getCustomerResponseStats, getUnnotifiedAffectedUsers } from "@/lib/qa-feedback";
 
-// 간단한 관리자 체크 (첫 번째 가입자 = 관리자)
 function isAdmin(email: string): boolean {
   const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim());
   return adminEmails.includes(email) || email === "admin@taxstudy.kr";
@@ -19,16 +19,22 @@ export async function GET(req: NextRequest) {
   const qaReport = getDailyQAReport();
   const openTickets = getTickets("open");
   const pendingQA = getPendingReports();
+  const activeFeedback = getActiveFeedback();
+  const customerStats = getCustomerResponseStats();
+  const unnotifiedUsers = getUnnotifiedAffectedUsers();
 
   return NextResponse.json({
     ticketStats,
     qaReport,
     openTickets: openTickets.slice(0, 20),
     pendingQA: pendingQA.slice(0, 20),
+    // V5.1: 피드백 + 고객대응
+    activeFeedback,
+    customerStats,
+    unnotifiedUsers: unnotifiedUsers.slice(0, 20),
   });
 }
 
-// 티켓 처리
 export async function PATCH(req: NextRequest) {
   const user = getUserFromCookie(req.headers.get("cookie"));
   if (!user || !isAdmin(user.email)) {

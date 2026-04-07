@@ -231,6 +231,198 @@ async function testErrorReport(p: Persona) {
   }
 }
 
+// ========== 문제 풀이 + 정답 체크 ==========
+async function testSolveQuestion(p: Persona) {
+  const subjects = [
+    { subject: "재정학", topic: "공공재", session: "1차" },
+    { subject: "세법학개론", topic: "소득세법 기초", session: "1차" },
+    { subject: "회계학개론", topic: "유형자산", session: "1차" },
+    { subject: "상법·민법·행정소송법", topic: "민법총칙", session: "1차" },
+  ];
+  const pick = subjects[Math.floor(Math.random() * subjects.length)];
+  const diff = Math.floor(Math.random() * 3) + 2; // 2~4
+
+  try {
+    // 1. 문제 생성
+    const { status, body: q } = await api("/api/generate", {
+      method: "POST",
+      body: JSON.stringify({ ...pick, difficulty: diff, verify: true }),
+    });
+    if (status !== 200 || !q?.choices) {
+      log(p, "풀이:생성실패", "ERROR", `HTTP ${status}`);
+      return;
+    }
+
+    // 2. 페르소나가 답 선택 (행동별 다른 전략)
+    let selectedAnswer: number;
+    if (p.behavior === "careful" || p.behavior === "power") {
+      selectedAnswer = q.answer; // 정답을 골라봄
+    } else if (p.behavior === "beginner") {
+      selectedAnswer = Math.floor(Math.random() * 5) + 1; // 랜덤
+    } else {
+      // 50% 정답, 50% 오답
+      selectedAnswer = Math.random() > 0.5 ? q.answer : ((q.answer % 5) + 1);
+    }
+
+    const isCorrect = selectedAnswer === q.answer;
+
+    // 3. 정답 체크: 해설과 정답이 일치하는지 검증
+    const issues: string[] = [];
+
+    // 3a. 해설에서 정답 번호 언급 확인
+    const explMentionsAnswer = q.explanation.includes(`${q.answer}번`) ||
+      q.explanation.includes(`정답은 ${q.answer}`) ||
+      q.explanation.includes(`${q.answer})`) ||
+      q.explanation.includes(`답은 ④⑤③②①`.charAt(q.answer - 1));
+    if (!explMentionsAnswer) {
+      // 해설에서 다른 번호를 정답이라고 하는지 체크
+      for (let i = 1; i <= 5; i++) {
+        if (i === q.answer) continue;
+        if (q.explanation.includes(`정답은 ${i}`) || q.explanation.includes(`정답: ${i}`)) {
+          issues.push(`해설이 ${i}번을 정답이라 하지만 answer는 ${q.answer}번`);
+        }
+      }
+    }
+
+    // 3b. 정답 선택지가 해설의 논리와 맞는지 (간단 키워드 체크)
+    const correctChoice = q.choices.find((c: any) => c.number === q.answer);
+    if (correctChoice) {
+      // 해설에 정답 선택지의 핵심 단어가 포함되어 있는지
+      const keywords = correctChoice.text.split(/[,.\s]/).filter((w: string) => w.length > 3).slice(0, 3);
+      const keywordMatch = keywords.some((kw: string) => q.explanation.includes(kw));
+      if (!keywordMatch && keywords.length > 0) {
+        issues.push(`해설에 정답 선택지 키워드 미포함 (${keywords.join(",")})`);
+      }
+    }
+
+    // 3c. 선택지 중 정답이 유일한지 (겹치는 선택지가 없는지)
+    if (correctChoice) {
+      for (const c of q.choices) {
+        if (c.number === q.answer) continue;
+        // 정답과 90% 이상 유사한 선택지가 있으면 문제
+        const sim = textSimilarity(correctChoice.text, c.text);
+        if (sim > 0.8) {
+          issues.push(`선택지 ${c.number}번이 정답과 매우 유사 (${Math.round(sim * 100)}%)`);
+        }
+      }
+    }
+
+    if (issues.length > 0) {
+      log(p, "풀이:정답검증", "QUALITY", `${pick.subject} d=${diff} | ${issues.join(" | ")}`);
+    } else {
+      log(p, "풀이:정답검증", "OK",
+        `${pick.subject} d=${diff} | 선택:${selectedAnswer}번 정답:${q.answer}번 ${isCorrect ? "O" : "X"} | 해설일관성OK`);
+    }
+
+    // 4. 오답일 때 해설이 유용한지 체크
+    if (!isCorrect) {
+      const wrongChoice = q.choices.find((c: any) => c.number === selectedAnswer);
+      if (wrongChoice) {
+        // 해설에 오답 이유 설명이 있는지
+        const wrongKeywords = wrongChoice.text.split(/[,.\s]/).filter((w: string) => w.length > 3).slice(0, 2);
+        const hasWrongExpl = wrongKeywords.some((kw: string) => q.explanation.includes(kw));
+        if (hasWrongExpl) {
+          log(p, "풀이:오답해설", "OK", `${selectedAnswer}번 오답 이유가 해설에 포함됨`);
+        } else {
+          log(p, "풀이:오답해설", "QUALITY", `${selectedAnswer}번 오답 이유가 해설에 미포함`);
+        }
+      }
+    }
+
+  } catch (e: any) {
+    log(p, "풀이", "ERROR", e.message);
+  }
+}
+
+function textSimilarity(a: string, b: string): number {
+  const wordsA = new Set(a.split(/\s+/).filter(w => w.length > 1));
+  const wordsB = new Set(b.split(/\s+/).filter(w => w.length > 1));
+  const inter = [...wordsA].filter(x => wordsB.has(x)).length;
+  const union = new Set([...wordsA, ...wordsB]).size;
+  return union > 0 ? inter / union : 0;
+}
+
+// ========== 모의고사 응시 테스트 ==========
+async function testExamTake(p: Persona) {
+  try {
+    // 시험 목록 가져오기
+    const { body: listData } = await api("/api/exams", {}, p.cookie);
+    if (!listData?.exams?.length) {
+      log(p, "모의고사:목록", "ERROR", "시험 없음");
+      return;
+    }
+
+    // 랜덤 시험 선택
+    const exam = listData.exams[Math.floor(Math.random() * listData.exams.length)];
+    log(p, "모의고사:선택", "OK", `${exam.title} (${exam.questionCount}문제)`);
+
+    // 시험 로드 (첫 로드 시 AI 생성 — 오래 걸림)
+    const { status, body: examData } = await api(`/api/exams/${exam.id}`, {}, p.cookie);
+    if (status === 401) {
+      log(p, "모의고사:로드", "OK", "미인증 → 401 정상");
+      return;
+    }
+    if (status !== 200 || !examData?.questions) {
+      log(p, "모의고사:로드", "ERROR", `HTTP ${status} ${examData?.error || ""}`);
+      return;
+    }
+
+    const questions = examData.questions;
+    const isObj = exam.session === "1차" || exam.session.includes("1");
+    log(p, "모의고사:로드", "OK", `${questions.length}문제 로드됨`);
+
+    // 답안 작성 (전체 풀기)
+    let score = 0;
+    const answerIssues: string[] = [];
+
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+
+      if (isObj) {
+        if (!q.choices || q.choices.length !== 5) {
+          answerIssues.push(`Q${i + 1}: 선택지 ${q.choices?.length || 0}개`);
+          continue;
+        }
+        if (typeof q.answer !== "number" || q.answer < 1 || q.answer > 5) {
+          answerIssues.push(`Q${i + 1}: 정답번호 이상 (${q.answer})`);
+          continue;
+        }
+        // 봇이 답 선택 (정답률 60% 설정)
+        const pick = Math.random() > 0.4 ? q.answer : ((q.answer % 5) + 1);
+        if (pick === q.answer) score++;
+      } else {
+        if (typeof q.answer !== "string" || q.answer.length < 10) {
+          answerIssues.push(`Q${i + 1}: 답안 짧음`);
+        }
+      }
+    }
+
+    if (answerIssues.length > 0) {
+      log(p, "모의고사:풀이", "BUG", answerIssues.join(" | "));
+    } else {
+      const pct = Math.round((score / questions.length) * 100);
+      log(p, "모의고사:풀이", "OK", `${score}/${questions.length} (${pct}%) 완료`);
+    }
+
+    // 점수 제출
+    const { status: submitStatus, body: submitData } = await api(`/api/exams/${exam.id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ score, total: questions.length }),
+    }, p.cookie);
+
+    if (submitStatus === 200 && submitData?.distribution) {
+      const dist = submitData.distribution;
+      log(p, "모의고사:제출", "OK",
+        `점수제출 성공 | 응시자 ${dist.totalTakers}명, 평균 ${dist.average}점, 내 순위 ${dist.myRank}등`);
+    } else {
+      log(p, "모의고사:제출", "BUG", `HTTP ${submitStatus} ${JSON.stringify(submitData)}`);
+    }
+
+  } catch (e: any) {
+    log(p, "모의고사", "ERROR", e.message);
+  }
+}
+
 async function testEdgeCases(p: Persona) {
   // 빈 바디 전송
   try {
@@ -262,16 +454,15 @@ async function runPersona(p: Persona) {
   switch (p.behavior) {
     case "beginner":
       await testPageLoad(p, "/");
-      await testPageLoad(p, "/quiz");
-      await testQuizGenerate(p);
+      await testSolveQuestion(p);
       break;
     case "power":
-      await testQuizGenerate(p);
-      await testQuizGenerate(p);
-      await testQuizGenerate(p);
+      await testSolveQuestion(p);
+      await testSolveQuestion(p);
+      await testSolveQuestion(p);
       break;
     case "complainer":
-      await testQuizGenerate(p);
+      await testSolveQuestion(p);
       await testSupport(p);
       await testErrorReport(p);
       break;
@@ -290,24 +481,24 @@ async function runPersona(p: Persona) {
       await testPageLoad(p, "/login");
       break;
     case "speed":
-      await Promise.all([testQuizGenerate(p), testQuizGenerate(p)]);
+      await testSolveQuestion(p);
+      await testSolveQuestion(p);
       break;
     case "careful":
       await testAuthMe(p);
-      await testExamList(p);
-      await testQuizGenerate(p);
+      await testSolveQuestion(p);
       break;
     case "random": {
-      const actions = [testQuizGenerate, testAuthMe, testExamList, testSupport];
+      const actions = [testSolveQuestion, testAuthMe, testExamList, testSupport, testQuizGenerate];
       const pick = actions[Math.floor(Math.random() * actions.length)];
       await pick(p);
       break;
     }
     case "exam_focused":
-      await testExamList(p);
+      await testExamTake(p);
       break;
     case "review_focused":
-      await testPageLoad(p, "/review");
+      await testSolveQuestion(p);
       await testSupport(p);
       break;
     case "edge_case":

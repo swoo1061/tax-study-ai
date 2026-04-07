@@ -4,6 +4,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { getLawContext } from "@/lib/law-context";
 import { getDifficultyGuide } from "@/lib/difficulty-calibration";
+import { getActivePromptFixes } from "@/lib/qa-feedback";
 
 let _apiKey: string | null = null;
 
@@ -38,6 +39,7 @@ function buildPrompt(subject: string, topic: string, session: string, difficulty
   const lawCtx = getLawContext(subject, topic);
   const diffGuide = getDifficultyGuide(subject, difficulty);
   const pattern = isObj ? OBJ_PATTERNS[Math.floor(Math.random() * OBJ_PATTERNS.length)] : "";
+  const qaFixes = getActivePromptFixes(subject); // QA팀 피드백 동적 주입
 
   if (isObj) {
     return `당신은 세무사 시험 출제위원입니다.
@@ -58,7 +60,7 @@ ${lawCtx}
 5. 해설은 200자 이상: "정답 ○번이 맞는 이유" + "나머지 번호가 틀린 이유" 각각 설명
 6. 계산 문제면 해설에 풀이 과정을 단계별로 적고, 최종 결과가 정답 선택지와 일치하는지 재검산
 7. 법조문은 실제 존재하는 것만 인용
-
+${qaFixes}
 출력 형식 (JSON만, 다른 텍스트 절대 금지):
 {"body":"문제 본문","choices":[{"number":1,"text":"선택지"},{"number":2,"text":"선택지"},{"number":3,"text":"선택지"},{"number":4,"text":"선택지"},{"number":5,"text":"선택지"}],"answer":정답번호,"explanation":"해설"}`;
   } else {
@@ -79,6 +81,7 @@ ${lawCtx}
 4. 계산 문제는 answer 작성 후 재검산하여 수치 오류 없는지 확인
 5. 독창적 사례/숫자 사용
 
+${qaFixes}
 출력 형식 (JSON만):
 {"body":"문제 본문","answer":"모범답안","explanation":"해설"}`;
   }
