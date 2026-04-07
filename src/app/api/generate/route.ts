@@ -39,7 +39,7 @@ function buildPrompt(subject: string, topic: string, session: string, difficulty
   const lawCtx = getLawContext(subject, topic);
   const diffGuide = getDifficultyGuide(subject, difficulty);
   const pattern = isObj ? OBJ_PATTERNS[Math.floor(Math.random() * OBJ_PATTERNS.length)] : "";
-  const qaFixes = getActivePromptFixes(subject); // QA팀 피드백 동적 주입
+  const qaFixes = getActivePromptFixes(subject);
 
   if (isObj) {
     return `당신은 세무사 시험 출제위원입니다.
