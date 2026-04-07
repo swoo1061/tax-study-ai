@@ -4,7 +4,7 @@ export default function TermsPage() {
       <h1 style={{ fontSize: "22px", marginBottom: "24px" }}>이용약관</h1>
 
       <Section title="제1조 (목적)">
-        본 약관은 세무사AI(이하 &quot;서비스&quot;)가 제공하는 AI 기반 세무사 시험 학습 서비스의 이용과 관련하여, 서비스와 이용자(이하 &quot;회원&quot;) 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
+        본 약관은 시험왕(이하 &quot;서비스&quot;)가 제공하는 AI 기반 세무사 시험 학습 서비스의 이용과 관련하여, 서비스와 이용자(이하 &quot;회원&quot;) 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
       </Section>
 
       <Section title="제2조 (서비스의 내용)">

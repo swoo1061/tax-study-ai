@@ -199,7 +199,7 @@ async function generateOne(subject: string, topic: string, session: string, diff
       ? "너는 5지선다 객관식 문제 생성기다. 반드시 choices 배열에 5개 선택지를 포함하고, answer는 1~5 정수로 출력해야 한다. 주관식/서술형 절대 금지."
       : "너는 주관식 서술형 문제 생성기다. choices 배열은 포함하지 않고, answer는 모범답안 문자열로 출력한다.";
     const message = await getClient().messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-opus-4-20250514",
       max_tokens: 4096,
       system: systemMsg,
       messages: [{ role: "user", content: prompt }],
@@ -219,7 +219,7 @@ async function generateOne(subject: string, topic: string, session: string, diff
       // 포맷 오류 시 피드백 포함 재시도 — 이전 오류를 알려줌
       if (attempt < MAX_RETRIES) {
         const fixMsg = await getClient().messages.create({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-opus-4-20250514",
           max_tokens: 4096,
           system: systemMsg,
           messages: [

@@ -4,9 +4,9 @@ export default function AboutPage() {
       <h1 style={{ fontSize: "22px", marginBottom: "24px" }}>회사 소개</h1>
 
       <div className="card" style={{ marginBottom: "20px" }}>
-        <h2 style={{ fontSize: "18px", marginBottom: "12px" }}>세무사AI</h2>
+        <h2 style={{ fontSize: "18px", marginBottom: "12px" }}>시험왕 - 세무사</h2>
         <p style={{ color: "var(--text-muted)", fontSize: "14px", lineHeight: "1.8" }}>
-          세무사AI는 AI 기술을 활용하여 세무사 시험 수험생에게 무한 문제 생성, 실전 모의고사, 취약점 분석 서비스를 제공합니다. 누구나 부담 없이 양질의 학습 콘텐츠에 접근할 수 있도록 합니다.
+          시험왕 - 세무사는 AI 기술을 활용하여 세무사 시험 수험생에게 무한 문제 생성, 실전 모의고사, 취약점 분석 서비스를 제공합니다. 누구나 부담 없이 양질의 학습 콘텐츠에 접근할 수 있도록 합니다.
         </p>
       </div>
 

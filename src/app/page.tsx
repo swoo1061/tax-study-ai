@@ -27,7 +27,7 @@ export default function Home() {
     <div>
       {/* Hero */}
       <div style={{ textAlign: "center", padding: "32px 0 24px" }}>
-        <h1 style={{ fontSize: "26px", marginBottom: "8px" }}>세무사 시험 AI 문제풀이</h1>
+        <h1 style={{ fontSize: "26px", marginBottom: "8px" }}>시험왕 - 세무사</h1>
         <p style={{ color: "var(--text-muted)", fontSize: "15px" }}>
           AI가 무한으로 문제를 생성합니다. 과목을 선택하고 바로 시작하세요.
         </p>

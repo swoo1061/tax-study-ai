@@ -307,27 +307,7 @@ function QuizPage() {
 
   // --- LOADING ---
   if (phase === "loading") {
-    return (
-      <div style={{ textAlign: "center", padding: "80px 0" }}>
-        <div style={{ fontSize: "40px", marginBottom: "16px" }}>&#9997;&#65039;</div>
-        <div style={{ fontSize: "18px", fontWeight: 600 }}>
-          AI가 문제를 만들고 있습니다... {batchSize > 1 && `(${genProgress}/${batchSize})`}
-        </div>
-        <div style={{ color: "var(--text-light)", fontSize: "14px", marginTop: "8px" }}>
-          {batchSize === 1 ? "약 5~10초 소요" : `약 ${Math.max(0, (batchSize - genProgress) * 8)}초 남음`}
-        </div>
-        {batchSize > 1 && (
-          <div className="progress-bar" style={{ maxWidth: "300px", margin: "16px auto 0" }}>
-            <div className="progress-fill" style={{ width: `${(genProgress / batchSize) * 100}%` }} />
-          </div>
-        )}
-        <div style={{ display: "flex", justifyContent: "center", gap: "6px", marginTop: "20px" }}>
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="loading-dot" style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
-          ))}
-        </div>
-      </div>
-    );
+    return <LoadingScreen batchSize={batchSize} genProgress={genProgress} />;
   }
 
   // --- ERROR ---
@@ -634,6 +614,116 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div style={{ marginBottom: "16px" }}>
       <label style={{ display: "block", fontWeight: 600, fontSize: "14px", marginBottom: "6px" }}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ========== 재밌는 로딩 화면 ==========
+const LOADING_MESSAGES = [
+  { emoji: "📚", text: "법조문 뒤지는 중..." },
+  { emoji: "🧮", text: "세율 계산하는 중..." },
+  { emoji: "✍️", text: "선택지 다듬는 중..." },
+  { emoji: "🔍", text: "매력적인 오답 만드는 중..." },
+  { emoji: "📋", text: "해설 작성하는 중..." },
+  { emoji: "🎯", text: "난이도 조절하는 중..." },
+  { emoji: "⚖️", text: "정답 검증하는 중..." },
+  { emoji: "🏛️", text: "국세청 자료 확인하는 중..." },
+  { emoji: "📐", text: "계산 과정 재검산 중..." },
+  { emoji: "🎓", text: "출제위원 회의 중..." },
+  { emoji: "💡", text: "사례 시나리오 구성 중..." },
+  { emoji: "🔢", text: "숫자 넣어서 문제 만드는 중..." },
+  { emoji: "📝", text: "거의 다 됐어요!" },
+  { emoji: "🏆", text: "합격의 길이 가까워지고 있어요!" },
+  { emoji: "☕", text: "잠깐, AI도 커피 한 잔..." },
+  { emoji: "🤓", text: "이 문제 풀 수 있으려나..." },
+  { emoji: "📖", text: "교과서 200페이지 읽는 중..." },
+  { emoji: "🧠", text: "두뇌 풀가동 중..." },
+  { emoji: "⏰", text: "좋은 문제는 시간이 걸립니다..." },
+  { emoji: "🎁", text: "특별한 문제 준비 중..." },
+];
+
+const TIPS = [
+  "오답노트를 자주 복습하면 정답률이 올라가요!",
+  "모의고사를 꾸준히 풀면 실전 감각이 생겨요",
+  "취약 주제를 집중 공략하세요",
+  "해설을 꼼꼼히 읽는 것이 합격의 지름길!",
+  "틀린 문제는 3번 이상 복습하세요",
+  "하루 10문제 꾸준히 > 한 번에 100문제",
+  "계산 문제는 직접 손으로 풀어보세요",
+  "법조문 번호까지 외우면 실전에서 유리해요",
+];
+
+function LoadingScreen({ batchSize, genProgress }: { batchSize: number; genProgress: number }) {
+  const [msgIdx, setMsgIdx] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const msgTimer = setInterval(() => {
+      setMsgIdx(prev => (prev + 1) % LOADING_MESSAGES.length);
+    }, 2500);
+    const elapsedTimer = setInterval(() => {
+      setElapsed(prev => prev + 1);
+    }, 1000);
+    return () => { clearInterval(msgTimer); clearInterval(elapsedTimer); };
+  }, []);
+
+  const msg = LOADING_MESSAGES[msgIdx];
+  const tip = TIPS[Math.floor(elapsed / 8) % TIPS.length];
+
+  return (
+    <div style={{ textAlign: "center", padding: "60px 0" }}>
+      <div style={{
+        fontSize: "50px",
+        marginBottom: "16px",
+        animation: "pulse 1.5s ease-in-out infinite",
+      }}>{msg.emoji}</div>
+
+      <div style={{ fontSize: "18px", fontWeight: 600, marginBottom: "6px" }}>
+        {msg.text}
+      </div>
+
+      {batchSize > 1 && (
+        <div style={{ fontSize: "14px", color: "var(--text-muted)", marginBottom: "12px" }}>
+          {genProgress}/{batchSize}문제 완료
+        </div>
+      )}
+
+      {batchSize > 1 && (
+        <div className="progress-bar" style={{ maxWidth: "300px", margin: "0 auto 16px" }}>
+          <div className="progress-fill" style={{ width: `${(genProgress / batchSize) * 100}%` }} />
+        </div>
+      )}
+
+      <div style={{
+        fontSize: "12px",
+        color: "var(--text-light)",
+        marginTop: "16px",
+      }}>
+        {elapsed}초 경과
+      </div>
+
+      <div style={{
+        marginTop: "24px",
+        padding: "12px 20px",
+        background: "var(--bg-card)",
+        borderRadius: "10px",
+        maxWidth: "350px",
+        margin: "24px auto 0",
+        border: "1px solid var(--border)",
+      }}>
+        <div style={{ fontSize: "11px", color: "var(--blue)", fontWeight: 600, marginBottom: "4px" }}>
+          TIP
+        </div>
+        <div style={{ fontSize: "13px", color: "var(--text-muted)", lineHeight: "1.5" }}>
+          {tip}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: "6px", marginTop: "20px" }}>
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="loading-dot" style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+        ))}
+      </div>
     </div>
   );
 }

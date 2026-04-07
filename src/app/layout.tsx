@@ -29,12 +29,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>세무사 시험 AI 문제풀이</title>
-        <meta name="description" content="세무사 1·2차 시험 대비 무한 AI 문제 생성" />
+        <title>시험왕 - 세무사</title>
+        <meta name="description" content="AI 세무사 시험 문제 무한 생성" />
       </head>
       <body suppressHydrationWarning>
         <nav className="nav">
-          <a href="/" className="nav-brand">세무사 AI</a>
+          <a href="/" className="nav-brand">시험왕</a>
           <button className="nav-hamburger" onClick={() => setMenuOpen(!menuOpen)}>
             {menuOpen ? "\u2715" : "\u2630"}
           </button>
@@ -91,7 +91,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             본 서비스는 AI가 생성한 학습 보조 자료이며, 세무사 시험 출제기관과 무관합니다.
           </div>
           <div style={{ marginTop: "4px" }}>
-            &copy; 2025 세무사AI. All rights reserved.
+            &copy; 2025 시험왕. All rights reserved.
           </div>
         </footer>
       </body>
